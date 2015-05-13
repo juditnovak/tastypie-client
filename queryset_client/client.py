@@ -4,6 +4,7 @@ import copy
 import decimal
 import slumber
 import urlparse
+import re
 
 
 __all__ = ["Client"]
@@ -421,6 +422,19 @@ def parse_id(resource_uri):
     """
     return resource_uri.split("/")[::-1][1]
 
+def parse_model(resource_uri):
+    """ url parsing
+
+    :param resource_uri:
+    :rtype: str (or None)
+    :return: Modelname guessed as ".../api/v1/<model_name>/..." from resource_uri
+    """
+
+    matchobj = re.search("/api/v1/([\w-]+)/", resource_uri)
+    if matchobj:
+        return matchobj.group(1)
+    return None
+
 
 class Response(object):
     """ Proxy Model Class """
@@ -451,13 +465,27 @@ class Response(object):
             return self.__getitem__(attr)
 
         related_type = self._schema["fields"][attr]["related_type"]
-        model = self.model.clone(attr)
+        related_schema = self._schema["fields"][attr]["related_schema"]
         url = self._response[attr]
+        # In case the attribute name was not the name of the model, we try
+        # to extract it from the resource URI 
+        model_name = parse_model(related_schema)
+        model = self.model.clone(model_name)
         if related_type == "to_many":
-            return self._to_many_class(model=model,
-                   query={"id__in": [parse_id(u) for u in url]}, instance=self.model)
+            if hasattr(url[0], 'items'):
+                return self._to_many_class(model=model,
+                       query={"id__in": [parse_id(u['resource_uri']) for u in url]}, instance=self.model)
+            else:
+                return self._to_many_class(model=model,
+                       query={"id__in": [parse_id(u) for u in url]}, instance=self.model)
         elif related_type == "to_one":
-            return self._to_one_class(model=model, url=url)
+            if hasattr(url, 'items'):
+                return  self._to_one_class(model=model, response=url)
+            else:
+                return self._to_one_class(model=model, url=url)
+
+
+
 
     def __getitem__(self, item):
         if item in self._response:
@@ -585,6 +613,8 @@ def model_gen(**configs):
                                 check_type = True
                             if field_type == "related":
                                 check_type = True
+                            elif field_type == "list":
+                                check_type = True
                         except Exception, err:
                             check_type = False
                         finally:
@@ -638,7 +668,8 @@ def model_gen(**configs):
         @classmethod
         def clone(cls, model_name=None):
             """ create `model_name` model """
-            return cls._base_client._model_gen(model_name or cls._model_name)
+            # Bugfix by Judit (missing args, clone wasn't a "real" clone, it was created with the default args)
+            return cls._base_client._model_gen(model_name or cls._model_name, strict_field=cls._strict_field, base_client=cls._base_client)
 
         @classmethod
         def schema(cls, *attrs):
@@ -758,7 +789,10 @@ class Client(object):
         if not model_name in self._schema_store:
             url = self._url_gen("{0}/schema/".format(model_name)) if model_name \
                                                                  else self._base_url
+            if not model_name:
+                model_name = 'all'
             self._schema_store[model_name] = self.request(url)
+
         return self._schema_store[model_name]
 
     def _url_gen(self, url):
