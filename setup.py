@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 # from setuptools.command.test import test
 
 version = '0.7.3'
-name = 'tastypie-queryset-client'
+name = 'tastypie-client'
 short_description = 'Client for Tastypie. Provide operation similar to the Django Model API'
 long_description = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
