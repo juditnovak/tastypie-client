@@ -18,6 +18,10 @@ class MultipleObjectsReturned(Exception):
     pass
 
 
+class ModelNotFoundError(Exception):
+    pass
+
+
 class FieldTypeError(TypeError):
     pass
 
@@ -452,15 +456,18 @@ class Response(object):
             return self.__getitem__(attr)
 
         related_type = self._schema["fields"][attr]["related_type"]
-        model = self._model.clone(attr)
+
         data = self._response[attr]
         if related_type == "to_many":
+            model = self._get_model(data[0])
             return self._to_many_class(model=model,
                    query={"id__in": [parse_id(u) for u in data]}, instance=self._model)
         elif related_type == "to_one":
             if isinstance(data, basestring):
+                model = self._get_model(data)
                 return self._to_one_class(model=model, url=data)
             else:
+                model = self._get_model(data['resource_uri'])
                 return self._to_one_class(model=model, response=data)
 
     def __getitem__(self, item):
@@ -500,6 +507,12 @@ class Response(object):
         self._model.delete()
         self.__response = dict()
 
+    def _get_model(self, url):
+        """ find a model for this url """
+        for model_name, urls in self._model._base_client.schema().items():
+            if url.startswith(urls['list_endpoint']):
+                return self._model.clone(model_name)
+        raise ModelNotFoundError
 
 def model_gen(**configs):
     """ generate model
