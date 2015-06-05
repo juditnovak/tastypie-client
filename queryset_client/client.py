@@ -652,7 +652,11 @@ def model_gen(**configs):
         @classmethod
         def clone(cls, model_name=None):
             """ create `model_name` model """
-            return cls._base_client._model_gen(model_name or cls._model_name)
+            return cls._base_client._model_gen(
+                model_name or cls._model_name,
+                strict_field=cls._strict_field,
+                base_client=cls._base_client,
+            )
 
         @classmethod
         def schema(cls, *attrs):
