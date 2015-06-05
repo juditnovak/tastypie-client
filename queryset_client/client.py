@@ -453,12 +453,15 @@ class Response(object):
 
         related_type = self._schema["fields"][attr]["related_type"]
         model = self._model.clone(attr)
-        url = self._response[attr]
+        data = self._response[attr]
         if related_type == "to_many":
             return self._to_many_class(model=model,
-                   query={"id__in": [parse_id(u) for u in url]}, instance=self._model)
+                   query={"id__in": [parse_id(u) for u in data]}, instance=self._model)
         elif related_type == "to_one":
-            return self._to_one_class(model=model, url=url)
+            if isinstance(data, basestring):
+                return self._to_one_class(model=model, url=data)
+            else:
+                return self._to_one_class(model=model, response=data)
 
     def __getitem__(self, item):
         if item in self._response:
