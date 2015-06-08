@@ -348,18 +348,19 @@ class Manager(object):
 
 class ManyToManyManager(Manager):
 
-    def __init__(self, query=None, instance=None, **kwargs):
+    def __init__(self, query=None, instance=None, responses=None, **kwargs):
         super(ManyToManyManager, self).__init__(**kwargs)
         self._query = query or dict()
         self._instance = instance
+        self._responses = responses
 
     def get_query_set(self):
-        return QuerySet(self._model, query=self._query).filter()
+        return QuerySet(self._model, query=self._query, responses=self._responses)
 
     def filter(self, *args, **kwargs):
         if "id__in" in kwargs:
             raise NotImplementedError("'id__in' does not allowed in ManyToManyManager.")
-        return QuerySet(self._model, query=self._query).filter(*args, **kwargs)
+        return super(ManyToManyManager, self).filter(*args, **kwargs)
 
     def add(self, *objs):
         """
@@ -381,6 +382,7 @@ class ManyToManyManager(Manager):
                 query_ids.append(parse_id(resource_uri))
             self._query.update({"id__in": list(set(query_ids))})
             setattr(self._instance, self._model._model_name, list(set(resource_models)))
+            self._responses = None
 
     def remove(self, *objs):
         """
@@ -402,6 +404,7 @@ class ManyToManyManager(Manager):
                 query_ids.remove(parse_id(resource_uri))
             self._query.update({"id__in": list(set(query_ids))})
             setattr(self._instance, self._model._model_name, list(set(resource_models)))
+            self._responses = None
 
     def clear(self):
         """
@@ -456,12 +459,31 @@ class Response(object):
             return self.__getitem__(attr)
 
         related_type = self._schema["fields"][attr]["related_type"]
-
         data = self._response[attr]
         if related_type == "to_many":
-            model = self._get_model(data[0])
-            return self._to_many_class(model=model,
-                   query={"id__in": [parse_id(u) for u in data]}, instance=self._model)
+            if not data or isinstance(data[0], basestring):
+                model = self._get_model(data[0])
+                return self._to_many_class(
+                    model=model,
+                    query={"id__in": [parse_id(u) for u in data]},
+                    instance=self._model,
+                )
+            else:
+                model = self._get_model(data[0]['resource_uri'])
+                responses = {
+                    'meta': {
+                        'next': None,
+                        'previous': None,
+                        'total_count': len(data),
+                    },
+                    'objects': data,
+                }
+                return self._to_many_class(
+                    model=model,
+                    query={"id__in": [parse_id(u['resource_uri']) for u in data]},
+                    instance=self._model,
+                    responses=responses,
+                )
         elif related_type == "to_one":
             if isinstance(data, basestring):
                 model = self._get_model(data)
