@@ -485,7 +485,9 @@ class Response(object):
                     responses=responses,
                 )
         elif related_type == "to_one":
-            if isinstance(data, basestring):
+            if data is None:
+                return data
+            elif isinstance(data, basestring):
                 model = self._get_model(data)
                 return self._to_one_class(model=model, url=data)
             else:
