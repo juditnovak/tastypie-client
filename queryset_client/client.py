@@ -348,10 +348,11 @@ class Manager(object):
 
 class ManyToManyManager(Manager):
 
-    def __init__(self, query=None, instance=None, responses=None, **kwargs):
+    def __init__(self, query=None, instance=None, attr=None, responses=None, **kwargs):
         super(ManyToManyManager, self).__init__(**kwargs)
         self._query = query or dict()
         self._instance = instance
+        self._attr = attr
         self._responses = responses
 
     def get_query_set(self):
@@ -373,7 +374,10 @@ class ManyToManyManager(Manager):
 
         """
         if objs:
-            resource_models = getattr(self._instance, self._model._model_name)
+            resource_model_cands = getattr(self._instance, self._attr)
+            resource_models = resource_model_cands
+            if len(resource_model_cands) > 0 and not isinstance(resource_model_cands[0], basestring):
+                resource_models = [x['resource_uri'] for x in resource_model_cands]
             query_ids = self._query.get("id__in", [])
             for obj in objs:
                 resource_uri = getattr(obj, "resource_uri")
@@ -381,7 +385,7 @@ class ManyToManyManager(Manager):
                 resource_models.append(resource_uri)
                 query_ids.append(parse_id(resource_uri))
             self._query.update({"id__in": list(set(query_ids))})
-            setattr(self._instance, self._model._model_name, list(set(resource_models)))
+            setattr(self._instance, self._attr, list(set(resource_models)))
             self._responses = None
 
     def remove(self, *objs):
@@ -395,7 +399,10 @@ class ManyToManyManager(Manager):
 
         """
         if objs:
-            resource_models = getattr(self._instance, self._model._model_name)
+            resource_model_cands = getattr(self._instance, self._attr)
+            resource_models = resource_model_cands
+            if len(resource_model_cands) > 0 and not isinstance(resource_model_cands[0], basestring):
+                resource_models = [x['resource_uri'] for x in resource_model_cands]
             query_ids = self._query.get("id__in", [])
             for obj in objs:
                 resource_uri = getattr(obj, "resource_uri")
@@ -403,7 +410,7 @@ class ManyToManyManager(Manager):
                 resource_models.remove(resource_uri)
                 query_ids.remove(parse_id(resource_uri))
             self._query.update({"id__in": list(set(query_ids))})
-            setattr(self._instance, self._model._model_name, list(set(resource_models)))
+            setattr(self._instance, self._attr, list(set(resource_models)))
             self._responses = None
 
     def clear(self):
@@ -417,7 +424,7 @@ class ManyToManyManager(Manager):
 
         """
         self._query.update({"id__in": list()})
-        setattr(self._instance, self._model._model_name, list())
+        setattr(self._instance, self._attr, list())
 
 
 def parse_id(resource_uri):
@@ -459,17 +466,19 @@ class Response(object):
             return self.__getitem__(attr)
 
         related_type = self._schema["fields"][attr]["related_type"]
+        related_schema = self._schema["fields"][attr]["related_schema"]
         data = self._response[attr]
         if related_type == "to_many":
             if not data or isinstance(data[0], basestring):
-                model = self._get_model(data[0])
+                model = self._get_model(related_schema)
                 return self._to_many_class(
                     model=model,
                     query={"id__in": [parse_id(u) for u in data]},
+                    attr=attr,
                     instance=self._model,
                 )
             else:
-                model = self._get_model(data[0]['resource_uri'])
+                model = self._get_model(related_schema)
                 responses = {
                     'meta': {
                         'next': None,
@@ -482,16 +491,17 @@ class Response(object):
                     model=model,
                     query={"id__in": [parse_id(u['resource_uri']) for u in data]},
                     instance=self._model,
+                    attr=attr,
                     responses=responses,
                 )
         elif related_type == "to_one":
             if data is None:
                 return data
             elif isinstance(data, basestring):
-                model = self._get_model(data)
+                model = self._get_model(related_schema)
                 return self._to_one_class(model=model, url=data)
             else:
-                model = self._get_model(data['resource_uri'])
+                model = self._get_model(related_schema)
                 return self._to_one_class(model=model, response=data)
 
     def __getitem__(self, item):
@@ -534,7 +544,7 @@ class Response(object):
     def _get_model(self, url):
         """ find a model for this url """
         for model_name, urls in self._model._base_client.schema().items():
-            if url.startswith(urls['list_endpoint']):
+            if url == urls['schema']:
                 return self._model.clone(model_name)
         raise ModelNotFoundError
 
