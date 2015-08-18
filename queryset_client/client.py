@@ -804,7 +804,9 @@ class Client(object):
         s = self._main_client._store
         requests = s["session"]
         serializer = slumber.serialize.Serializer(default=s["format"])
-        return serializer.loads(requests.request(method, request_url).content)
+        req = requests.request(method, request_url)
+        req.raise_for_status()
+        return serializer.loads(req.content)
 
     def schema(self, model_name=None):
         """ receive schema
