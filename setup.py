@@ -2,8 +2,8 @@ import os
 from setuptools import setup, find_packages
 # from setuptools.command.test import test
 
-version = '0.7.4'
-name = 'tastypie-client'
+version = '0.7.4.4'
+name = 'tastypie-client-named-related'
 short_description = 'Client for Tastypie. Provide operation similar to the Django Model API'
 long_description = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
@@ -12,7 +12,7 @@ packages, data_files = [], []
 root_dir = os.path.dirname(__file__)
 if root_dir != '':
     os.chdir(root_dir)
-extensions_dir = 'queryset_client'
+extensions_dir = 'queryset_client_named_related'
 
 
 setup(
